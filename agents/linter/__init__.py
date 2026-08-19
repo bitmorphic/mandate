@@ -1,0 +1,1 @@
+# MANDATE — Linter agent
