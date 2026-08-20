@@ -34,4 +34,7 @@ jobs:
           ARMORIQ_API_KEY: ${{ secrets.ARMORIQ_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          python review_repo.py . --branch ${{ github.event.pull_request.base.ref }}
+          # Fetch the base branch explicitly from origin
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+          # Run review against origin/base_branch
+          python review_repo.py . --branch origin/${{ github.event.pull_request.base.ref }}
