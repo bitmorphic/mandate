@@ -16,7 +16,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
-FIXTURE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixture")
+FIXTURE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 def setup_test_repo(base_dir: str = None) -> str:

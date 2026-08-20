@@ -31,6 +31,7 @@ from governance.identity import (
     verify_identity_independence,
 )
 from governance.audit import AuditTrail
+from governance.authority import GovernanceManager
 from tools.git_ops import list_changed_files, get_current_branch
 
 
@@ -49,6 +50,8 @@ def run_agent_subprocess(
     repo_path: str,
     changed_files: List[str],
     governed: bool = False,
+    token_data: Optional[dict] = None,
+    base_branch: str = "main",
 ) -> dict:
     """Run an agent as a genuinely separate subprocess.
 
@@ -61,9 +64,13 @@ def run_agent_subprocess(
         "repo_path": repo_path,
         "changed_files": changed_files,
         "governed": governed,
+        "token_data": token_data,
+        "base_branch": base_branch,
     }
 
     try:
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
         result = subprocess.run(
             [sys.executable, agent_module],
             input=json.dumps(task),
@@ -71,22 +78,30 @@ def run_agent_subprocess(
             text=True,
             timeout=120,
             cwd=PROJECT_ROOT,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
         )
 
-        if result.returncode != 0:
-            # Agent process failed — capture stderr for debugging
+        # Print agent logs (sent to stderr) for the demo display
+        if result.stderr:
+            for log_line in result.stderr.strip().splitlines():
+                print(log_line)
+
+        if result.returncode != 0 and not (result.stdout or "").strip():
+            # Agent process truly failed (no output at all)
             return {
                 "agent_id": f"mandate-{agent_name}",
                 "agent_role": agent_name,
                 "status": "error",
-                "error": result.stderr[:500] if result.stderr else "Unknown error",
+                "error": (result.stderr or "")[:500] or "Unknown error",
                 "findings": [],
                 "actions_taken": [],
             }
 
-        # Parse the agent's JSON output from stdout
-        # Filter out non-JSON log lines (agent prints logs to stdout too)
-        stdout_lines = result.stdout.strip().split("\n")
+        # Parse the agent's JSON output from stdout (clean, no log lines)
+        raw_stdout = result.stdout or ""
+        stdout_lines = raw_stdout.strip().split("\n")
         json_line = stdout_lines[-1]  # Last line should be the JSON result
 
         try:
@@ -155,6 +170,27 @@ def run_review(
     identities = create_all_identities()
     verify_identity_independence(identities)
     print(display_identities(identities))
+    
+    # Initialize governance if governed
+    governance = None
+    if governed:
+        governance = GovernanceManager(identities["coordinator"], is_coordinator=True)
+        # Create the root plan encompassing all authorized scopes for the sub-agents
+        # This defines the maximum authority envelope for the entire review task
+        all_scopes = set()
+        for agent_name in ["linter", "security", "performance"]:
+            all_scopes.update(identities[agent_name].scopes)
+            
+        tool_calls = [{"name": scope, "arguments": "{}"} for scope in all_scopes]
+        
+        print("  ┌─ Minting root intent token for Code Review task")
+        root_token = governance.capture_and_mint_token(
+            goal="Code Review Pipeline", 
+            steps=tool_calls
+        )
+        print(f"  │  Token ID: {root_token.token_id}")
+        print("  └─ ✓")
+        print()
 
     # ─── Step 2: Get changed files ──────────────────────────────────
     print("┌─ PHASE 2: Analyzing Pull Request")
@@ -182,6 +218,17 @@ def run_review(
         print(f"  │  PID: (separate process)")
         print(f"  │  Identity: {identity.fingerprint}")
         print(f"  │  Scopes: {', '.join(identity.scopes)}")
+        
+        token_data = None
+        if governed:
+            # Delegate a subtree to the sub-agent
+            print(f"  │  Delegating subtree token...")
+            sub_token = governance.delegate_to_agent(
+                target_agent=identity
+            )
+            token_data = sub_token.model_dump()
+            print(f"  │  Delegated token ID: {sub_token.token_id}")
+            
         print(f"  │")
 
         # Record delegation in audit trail
@@ -197,8 +244,10 @@ def run_review(
         agent_result = run_agent_subprocess(
             agent_name,
             repo_path,
-            changed_files,
+            changed_files=changed_files,
             governed=governed,
+            token_data=token_data,
+            base_branch=base_branch,
         )
         elapsed = time.time() - start_time
 

@@ -20,6 +20,9 @@ import sys
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 from demo.fixture.setup_fixture import setup_test_repo, teardown_test_repo
 from coordinator.main import run_review
 from tools.git_ops import run_git

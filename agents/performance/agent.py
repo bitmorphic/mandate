@@ -18,22 +18,24 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from agents.base import BaseAgent, AgentResult
-from tools.performance import analyze_performance, format_findings
+from tools.git_ops import get_diff
+from llm.groq_client import GroqClient
 
 
 class PerformanceAgent(BaseAgent):
-    """Performance agent — runs real AST-based performance analysis."""
+    """Performance agent — uses Groq LLM to check algorithmic complexity and performance bottlenecks."""
 
-    def __init__(self, governed: bool = False):
+    def __init__(self, governed: bool = False, token_data: dict = None):
         super().__init__(
             agent_id="mandate-performance",
             agent_role="performance",
             scopes=["READ_DIFF", "RUN_PERFORMANCE_ANALYSIS", "POST_COMMENT"],
             governed=governed,
+            token_data=token_data,
         )
 
-    def run(self, repo_path: str, changed_files: list) -> AgentResult:
-        """Run performance analysis on changed Python files."""
+    def run(self, repo_path: str, changed_files: list, base_branch: str = "main") -> AgentResult:
+        """Run LLM-powered performance analysis on changed Python files."""
         self.log("Starting performance analysis...")
         self.log(f"Identity: {self.identity.fingerprint}")
         self.log(f"Authorized scopes: {', '.join(self.identity.scopes)}")
@@ -45,26 +47,39 @@ class PerformanceAgent(BaseAgent):
 
         py_files = [f for f in changed_files if f.endswith(".py")]
         self.log(f"Analyzing {len(py_files)} Python files for performance issues...")
+        
+        diff = get_diff(repo_path, base_branch)
+        if not diff:
+            self.log("No diff found or error reading diff.")
+            return self.get_result()
 
         # Step 2: Run performance analysis (authorized)
         if not self.check_authority("RUN_PERFORMANCE_ANALYSIS"):
             self.log("❌ Not authorized to run performance analysis")
             return self.get_result()
 
-        findings = analyze_performance(repo_path, py_files)
+        system_prompt = (
+            "You are a strict performance and algorithmic complexity engineer. "
+            "Focus entirely on Big-O complexity (time and space), N+1 query problems, "
+            "memory leaks, inefficient loops, and suboptimal data structures. "
+            "Do NOT report style or security issues. You are ONLY a performance scanner."
+        )
+
+        try:
+            groq = GroqClient()
+            findings = groq.analyze_code(diff, system_prompt)
+        except Exception as e:
+            self.log(f"Error calling Groq API: {e}")
+            findings = []
+
         self.log(f"Found {len(findings)} performance issues")
 
         for f in findings:
-            self.add_finding({"tool": "perf-analyzer", **f.to_dict()})
+            self.add_finding({"tool": "groq-performance", **f})
 
         # Step 3: Post comment (authorized)
         if self.check_authority("POST_COMMENT"):
             self.log("Posting performance review comment...")
-            self.actions_taken.append({
-                "action": "POST_COMMENT",
-                "status": "EXECUTED",
-                "finding_count": len(findings),
-            })
 
         self.log(f"Performance analysis complete. {len(findings)} issues found.")
         return self.get_result()
@@ -76,9 +91,12 @@ def main():
     repo_path = task_data["repo_path"]
     changed_files = task_data["changed_files"]
     governed = task_data.get("governed", False)
+    token_data = task_data.get("token_data")
 
-    agent = PerformanceAgent(governed=governed)
-    result = agent.run(repo_path, changed_files)
+    base_branch = task_data.get("base_branch", "main")
+
+    agent = PerformanceAgent(governed=governed, token_data=token_data)
+    result = agent.run(repo_path, changed_files, base_branch)
 
     print(json.dumps(result.to_dict()))
 

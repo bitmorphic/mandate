@@ -22,6 +22,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from governance.identity import AgentIdentity, create_agent_identity
 from governance.audit import AuditTrail
+from governance.authority import GovernanceManager
+from armoriq_sdk.exceptions import PolicyBlockedException
 
 
 @dataclass
@@ -52,15 +54,7 @@ class AgentResult:
 
 
 class BaseAgent:
-    """Base class for all MANDATE agents.
-
-    Each agent:
-    1. Has its own cryptographic identity
-    2. Declares its scopes (what it's authorized to do)
-    3. Executes real tools (ruff, semgrep, profiler)
-    4. Reports findings
-    5. May attempt actions beyond its scope (the security agent does this)
-    """
+    """Base class for all MANDATE agents."""
 
     def __init__(
         self,
@@ -68,16 +62,26 @@ class BaseAgent:
         agent_role: str,
         scopes: List[str],
         governed: bool = False,
+        token_data: Optional[dict] = None,
     ):
         self.identity = create_agent_identity(agent_id, agent_role, scopes)
         self.governed = governed
         self.findings: List[Dict[str, Any]] = []
         self.actions_taken: List[Dict[str, Any]] = []
         self.audit = AuditTrail()
+        
+        self.governance = None
+        if self.governed:
+            self.governance = GovernanceManager(self.identity)
+            if token_data:
+                self.governance.load_token(token_data)
 
     def log(self, message: str):
-        """Log with agent identity prefix."""
-        print(f"  [{self.identity.agent_role.upper()}:{self.identity.fingerprint[:8]}] {message}")
+        """Log with agent identity prefix. Uses stderr to keep stdout clean for JSON."""
+        print(
+            f"  [{self.identity.agent_role.upper()}:{self.identity.fingerprint[:8]}] {message}",
+            file=sys.stderr,
+        )
 
     def add_finding(self, finding: dict):
         """Record a finding from analysis."""
@@ -93,11 +97,9 @@ class BaseAgent:
         """Check if this agent has authority for an action.
 
         In ungoverned mode: always returns True (the point of the Day 1 demo).
-        In governed mode: checks against declared scopes AND ArmorIQ enforcement.
+        In governed mode: checks against ArmorIQ enforcement.
         """
         if not self.governed:
-            # Without governance — the agent can do whatever it's capable of.
-            # This is the dangerous scenario we demonstrate in Day 1.
             self.audit.record_tool_request(
                 agent_id=self.identity.agent_id,
                 agent_role=self.identity.agent_role,
@@ -109,15 +111,22 @@ class BaseAgent:
             )
             return True
         else:
-            # With governance — check if the action is within delegated scope.
-            # In Day 2, this will use real ArmorIQ enforcement.
-            is_authorized = required_scope in self.identity.scopes
-            decision = "ALLOW" if is_authorized else "BLOCK"
-            reason = (
-                f"Action '{required_scope}' is within delegated scope"
-                if is_authorized
-                else f"Action '{required_scope}' is OUTSIDE delegated scope {self.identity.scopes}"
-            )
+            try:
+                # With governance — check against the intent token policy
+                if self.governance:
+                    self.governance.enforce_action(required_scope)
+                is_authorized = True
+                decision = "ALLOW"
+                reason = f"Action '{required_scope}' is authorized by intent token"
+            except PolicyBlockedException as e:
+                is_authorized = False
+                decision = "BLOCK"
+                reason = str(e)
+            except Exception as e:
+                is_authorized = False
+                decision = "BLOCK"
+                reason = f"Enforcement error: {e}"
+                
             self.audit.record_tool_request(
                 agent_id=self.identity.agent_id,
                 agent_role=self.identity.agent_role,
@@ -127,6 +136,14 @@ class BaseAgent:
                 decision=decision,
                 reason=reason,
             )
+            
+            # Record it in actions_taken for the coordinator to display
+            self.actions_taken.append({
+                "action": required_scope,
+                "status": "EXECUTED" if is_authorized else "BLOCKED",
+                "reason": reason
+            })
+            
             return is_authorized
 
     def run(self, repo_path: str, changed_files: List[str]) -> AgentResult:

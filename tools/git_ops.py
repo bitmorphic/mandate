@@ -27,8 +27,11 @@ def run_git(args: List[str], cwd: str) -> Tuple[int, str, str]:
     result = subprocess.run(
         ["git"] + args,
         cwd=cwd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=30,
     )
     return result.returncode, result.stdout.strip(), result.stderr.strip()
