@@ -181,7 +181,17 @@ def run_real_review(clone_url: str, repo_name: str, branch: str, default_branch:
             })
             return
 
-        print(f"✅ Clone successful. Running MANDATE review...")
+        print(f"✅ Clone successful.")
+
+        # If the pushed branch differs from default, check it out so the diff works
+        if branch and branch != default_branch:
+            print(f"🌿 Checking out branch: {branch}")
+            subprocess.run(
+                ["git", "checkout", branch],
+                capture_output=True, text=True, timeout=30, cwd=tmp_dir,
+            )
+
+        print(f"🔍 Running MANDATE review...")
 
         # Run the review using review_repo.py
         project_root = os.path.dirname(os.path.abspath(__file__))
