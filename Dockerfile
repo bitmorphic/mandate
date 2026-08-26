@@ -14,13 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project code into the container
 COPY . .
 
-# Initialize a dummy git repo so MANDATE doesn't crash if it tries to check diffs
-RUN git config --global init.defaultBranch main && \
-    git config --global user.email "bot@mandate.ai" && \
-    git config --global user.name "MANDATE Bot" && \
-    git init && \
-    git add . && \
-    git commit -m "Initial commit for Zop.dev deployment"
+
 
 # Expose port 8080 for Zop.dev
 EXPOSE 8080
