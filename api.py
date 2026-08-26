@@ -38,6 +38,21 @@ def dashboard():
     reviews_html = ""
     for review in reversed(recent_reviews[-10:]):
         status_icon = "🛡️" if review.get("blocked", 0) > 0 else "✅"
+        raw_out = review.get('raw_output', '')
+        # Escape HTML chars for safe display inside <pre>
+        safe_raw_out = raw_out.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        details_html = ""
+        if safe_raw_out:
+            details_html = f"""
+            <details style="margin-top:10px; cursor:pointer;">
+                <summary style="color:#f97316; font-size:13px; font-weight:bold;">Show full MANDATE console output</summary>
+                <div style="background:#0d1117; padding:12px; border-radius:6px; margin-top:8px; overflow-x:auto; border:1px solid #30363d;">
+                    <pre style="color:#e6edf3; font-size:12px; line-height:1.4; margin:0;">{safe_raw_out}</pre>
+                </div>
+            </details>
+            """
+            
         reviews_html += f"""
         <div style="background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:16px; margin:8px 0;">
             <strong>{status_icon} {review.get('repo', 'unknown')}</strong>
@@ -48,6 +63,7 @@ def dashboard():
                 Blocked writes: {review.get('blocked', 0)} |
                 {review.get('time', '')}
             </span>
+            {details_html}
         </div>
         """
 
@@ -236,6 +252,7 @@ def run_real_review(clone_url: str, repo_name: str, branch: str, default_branch:
             "repo": repo_name, "branch": branch,
             "findings": findings, "blocked": blocked,
             "time": time.strftime("%H:%M:%S"),
+            "raw_output": review_result.stdout or "No output generated.",
         })
 
         status = "🛡️ PROTECTED" if blocked > 0 else "✅ CLEAN"
