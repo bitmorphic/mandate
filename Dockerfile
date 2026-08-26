@@ -19,8 +19,8 @@ ENV PYTHONUNBUFFERED=1
 
 
 
-# Expose port 8080 for Zop.dev
-EXPOSE 8080
+# Expose port 8000 for Zop.dev
+EXPOSE 8000
 
 # Command to run the FastAPI wrapper server
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
