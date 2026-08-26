@@ -16,8 +16,17 @@ import os
 import sys
 import json
 import time
+import logging
+
+# Configure logging so Zop.dev can see all output
+logging.basicConfig(level=logging.INFO, stream=sys.stdout, format="%(asctime)s | %(message)s")
+logger = logging.getLogger("mandate")
 
 app = FastAPI(title="MANDATE Governance API")
+
+@app.on_event("startup")
+async def startup():
+    logger.info("🚀 MANDATE server started and ready to receive webhooks")
 
 # Store recent review results for the dashboard
 recent_reviews = []

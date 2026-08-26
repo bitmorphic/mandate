@@ -14,6 +14,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project code into the container
 COPY . .
 
+# Force Python to print output immediately (critical for Zop.dev logs)
+ENV PYTHONUNBUFFERED=1
+
 
 
 # Expose port 8080 for Zop.dev
