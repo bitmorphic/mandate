@@ -134,9 +134,8 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
     print(f"   Clone URL: {clone_url}")
     print(f"{'='*60}\n")
 
-    # Run the review in the background so we respond to GitHub quickly
-    background_tasks.add_task(
-        run_real_review,
+    # Run the review synchronously to prevent Zop.dev serverless container from freezing the background task
+    run_real_review(
         clone_url=clone_url,
         repo_name=repo_name,
         branch=branch,
