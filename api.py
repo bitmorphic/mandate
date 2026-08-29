@@ -205,11 +205,6 @@ def dashboard():
                 </div>
             </div>
 
-            <div style="margin:24px 0; text-align:center; background:#161b22; border:1px solid #30363d; border-radius:12px; padding:16px;">
-                <!-- Embedding Google Drive video -->
-                <iframe src="https://drive.google.com/file/d/1HdJYhQ0SgrssghZtBD0Ex937gPQeudS9/preview" width="100%" height="400" style="border:none; border-radius:8px; overflow:hidden;" allow="autoplay"></iframe>
-            </div>
-
             <div class="section-title">📋 Recent Reviews</div>
             {reviews_html}
 
