@@ -36,66 +36,189 @@ recent_reviews = []
 def dashboard():
     """Landing page showing MANDATE status and recent reviews."""
     reviews_html = ""
+    total_blocked = 0
+    total_findings = 0
+    total_reviews = len(recent_reviews)
+    
     for review in reversed(recent_reviews[-10:]):
-        status_icon = "🛡️" if review.get("blocked", 0) > 0 else "✅"
+        blocked = review.get("blocked", 0)
+        findings = review.get("findings", 0)
+        total_blocked += blocked
+        total_findings += findings
+        
+        status_icon = "🛡️" if blocked > 0 else "✅"
+        border_color = "#f97316" if blocked > 0 else "#22c55e"
+        
         raw_out = review.get('raw_output', '')
-        # Escape HTML chars for safe display inside <pre>
         safe_raw_out = raw_out.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        
+        error_html = ""
+        if review.get("error"):
+            error_html = f'<span style="color:#ef4444; font-size:12px; margin-left:8px;">⚠️ {review["error"]}</span>'
         
         details_html = ""
         if safe_raw_out:
             details_html = f"""
             <details style="margin-top:10px; cursor:pointer;">
-                <summary style="color:#f97316; font-size:13px; font-weight:bold;">Show full MANDATE console output</summary>
-                <div style="background:#0d1117; padding:12px; border-radius:6px; margin-top:8px; overflow-x:auto; border:1px solid #30363d;">
-                    <pre style="color:#e6edf3; font-size:12px; line-height:1.4; margin:0;">{safe_raw_out}</pre>
+                <summary style="color:#f97316; font-size:13px; font-weight:bold;">▶ Show full MANDATE console output</summary>
+                <div style="background:#0d1117; padding:12px; border-radius:6px; margin-top:8px; overflow-x:auto; border:1px solid #30363d; max-height:500px; overflow-y:auto;">
+                    <pre style="color:#e6edf3; font-size:11px; line-height:1.4; margin:0; white-space:pre-wrap; word-wrap:break-word;">{safe_raw_out}</pre>
                 </div>
             </details>
             """
             
         reviews_html += f"""
-        <div style="background:#1a1a2e; border:1px solid #333; border-radius:8px; padding:16px; margin:8px 0;">
-            <strong>{status_icon} {review.get('repo', 'unknown')}</strong>
-            <span style="color:#888; margin-left:12px;">{review.get('branch', '')}</span>
-            <br/>
-            <span style="color:#aaa; font-size:13px;">
-                Findings: {review.get('findings', 0)} |
-                Blocked writes: {review.get('blocked', 0)} |
-                {review.get('time', '')}
-            </span>
+        <div style="background:linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border-left:3px solid {border_color}; border-radius:8px; padding:16px; margin:10px 0; transition:transform 0.2s;" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <strong style="font-size:15px;">{status_icon} {review.get('repo', 'unknown')}</strong>
+                    <span style="color:#888; margin-left:12px; font-size:13px;">{review.get('branch', '')}</span>
+                    {error_html}
+                </div>
+                <span style="color:#555; font-size:12px;">{review.get('time', '')}</span>
+            </div>
+            <div style="margin-top:8px; display:flex; gap:16px;">
+                <span style="background:#1e293b; padding:4px 10px; border-radius:12px; font-size:12px; color:#94a3b8;">📊 Findings: {review.get('findings', 0)}</span>
+                <span style="background:{'#7f1d1d' if blocked > 0 else '#14532d'}; padding:4px 10px; border-radius:12px; font-size:12px; color:{'#fca5a5' if blocked > 0 else '#86efac'};">{'🚫' if blocked > 0 else '✅'} Blocked: {blocked}</span>
+            </div>
             {details_html}
         </div>
         """
 
     if not reviews_html:
-        reviews_html = '<p style="color:#888;">No reviews yet. Push code to a connected repo to trigger a review.</p>'
+        reviews_html = '''
+        <div style="text-align:center; padding:40px 20px; background:#161b22; border:1px dashed #30363d; border-radius:12px;">
+            <p style="font-size:40px; margin:0;">⏳</p>
+            <p style="color:#888; font-size:14px; margin-top:12px;">No reviews yet. Push code to a connected repo to trigger a review.</p>
+            <p style="color:#555; font-size:12px;">Waiting for GitHub webhook...</p>
+        </div>'''
+
+    protection_rate = int((total_blocked / max(total_reviews, 1)) * 100) if total_reviews > 0 else 0
 
     return f"""
     <html>
-    <head><title>MANDATE — Governed AI</title></head>
-    <body style="background:#0d1117; color:#e6edf3; font-family:system-ui,sans-serif; max-width:800px; margin:40px auto; padding:0 20px;">
-        <pre style="color:#f97316; font-size:11px; line-height:1.2;">
+    <head>
+        <title>MANDATE — Governed AI Dashboard</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+        <style>
+            * {{ margin:0; padding:0; box-sizing:border-box; }}
+            body {{ background:#0d1117; color:#e6edf3; font-family:'Inter',system-ui,sans-serif; }}
+            @keyframes pulse {{ 0%,100% {{ opacity:1; }} 50% {{ opacity:0.5; }} }}
+            @keyframes slideIn {{ from {{ opacity:0; transform:translateY(20px); }} to {{ opacity:1; transform:translateY(0); }} }}
+            @keyframes glow {{ 0%,100% {{ box-shadow:0 0 5px #f97316; }} 50% {{ box-shadow:0 0 20px #f97316, 0 0 40px rgba(249,115,22,0.3); }} }}
+            .container {{ max-width:900px; margin:0 auto; padding:20px; }}
+            .hero {{ text-align:center; padding:40px 0 20px; animation:slideIn 0.6s ease-out; }}
+            .ascii-logo {{ color:#f97316; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.15; letter-spacing:1px; }}
+            .tagline {{ font-size:22px; font-weight:700; margin-top:12px; background:linear-gradient(90deg,#e6edf3,#f97316); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
+            .subtitle {{ color:#8b949e; font-size:14px; margin-top:6px; }}
+            .badge {{ display:inline-block; background:#21262d; border:1px solid #30363d; padding:3px 10px; border-radius:12px; font-size:11px; color:#8b949e; margin:2px; font-family:'JetBrains Mono',monospace; }}
+            .badge-orange {{ border-color:#f97316; color:#f97316; }}
+            .stats {{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:24px 0; animation:slideIn 0.8s ease-out; }}
+            .stat-card {{ background:linear-gradient(135deg,#161b22,#1a1f2e); border:1px solid #30363d; border-radius:12px; padding:20px; text-align:center; transition:border-color 0.3s; }}
+            .stat-card:hover {{ border-color:#f97316; }}
+            .stat-number {{ font-size:32px; font-weight:700; font-family:'JetBrains Mono',monospace; }}
+            .stat-label {{ color:#8b949e; font-size:12px; margin-top:4px; text-transform:uppercase; letter-spacing:1px; }}
+            .status-bar {{ background:#161b22; border:1px solid #30363d; border-radius:12px; padding:16px 20px; margin:16px 0; display:flex; justify-content:space-between; align-items:center; animation:slideIn 0.7s ease-out; }}
+            .status-dot {{ width:10px; height:10px; border-radius:50%; background:#22c55e; display:inline-block; margin-right:8px; animation:pulse 2s infinite; }}
+            .section-title {{ font-size:16px; font-weight:700; margin:28px 0 12px; display:flex; align-items:center; gap:8px; }}
+            .arch-grid {{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:16px 0; }}
+            .arch-step {{ background:#161b22; border:1px solid #30363d; border-radius:8px; padding:12px; text-align:center; font-size:12px; transition:all 0.3s; }}
+            .arch-step:hover {{ border-color:#f97316; transform:translateY(-2px); }}
+            .arch-step .step-icon {{ font-size:24px; margin-bottom:6px; }}
+            .arch-step .step-title {{ font-weight:600; font-size:11px; color:#e6edf3; }}
+            .arch-step .step-desc {{ color:#8b949e; font-size:10px; margin-top:4px; }}
+            .footer {{ text-align:center; padding:30px 0; color:#30363d; font-size:12px; border-top:1px solid #21262d; margin-top:30px; }}
+            .footer a {{ color:#f97316; text-decoration:none; }}
+            code {{ background:#1e293b; padding:3px 8px; border-radius:4px; font-family:'JetBrains Mono',monospace; font-size:12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="hero">
+                <pre class="ascii-logo">
   ███╗   ███╗ █████╗ ███╗   ██╗██████╗  █████╗ ████████╗███████╗
   ████╗ ████║██╔══██╗████╗  ██║██╔══██╗██╔══██╗╚══██╔══╝██╔════╝
   ██╔████╔██║███████║██╔██╗ ██║██║  ██║███████║   ██║   █████╗
   ██║╚██╔╝██║██╔══██║██║╚██╗██║██║  ██║██╔══██║   ██║   ██╔══╝
   ██║ ╚═╝ ██║██║  ██║██║ ╚████║██████╔╝██║  ██║   ██║   ███████╗
-  ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝
-        </pre>
-        <h2>Autonomous AI. Governed by Authority.</h2>
-        <p style="color:#aaa;">Powered by <strong style="color:#f97316;">ArmorIQ SDK</strong> — Cryptographic Intent Enforcement</p>
+  ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝</pre>
+                <p class="tagline">Autonomous AI. Governed by Authority.</p>
+                <p class="subtitle">Powered by <strong style="color:#f97316;">ArmorIQ SDK</strong> — Cryptographic Intent Enforcement</p>
+                <div style="margin-top:12px;">
+                    <span class="badge badge-orange">Python 3.10+</span>
+                    <span class="badge">ArmorIQ SDK</span>
+                    <span class="badge">Groq LLM</span>
+                    <span class="badge">Ed25519</span>
+                    <span class="badge">Docker</span>
+                    <span class="badge">GitHub Actions</span>
+                </div>
+            </div>
 
-        <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:20px; margin:20px 0;">
-            <h3>🟢 Server Status: Active</h3>
-            <p style="color:#aaa;">Webhook endpoint: <code style="background:#0d1117; padding:4px 8px; border-radius:4px;">POST /webhook</code></p>
-            <p style="color:#aaa;">Health check: <code style="background:#0d1117; padding:4px 8px; border-radius:4px;">GET /health</code></p>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-number" style="color:#3b82f6;">{total_reviews}</div>
+                    <div class="stat-label">Total Reviews</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" style="color:#ef4444;">{total_blocked}</div>
+                    <div class="stat-label">Writes Blocked</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" style="color:#22c55e;">{protection_rate}%</div>
+                    <div class="stat-label">Protection Rate</div>
+                </div>
+            </div>
+
+            <div class="status-bar">
+                <div>
+                    <span class="status-dot"></span>
+                    <strong>Server Status: Active</strong>
+                </div>
+                <div style="display:flex; gap:12px;">
+                    <span style="color:#8b949e; font-size:13px;">Webhook: <code>POST /webhook</code></span>
+                    <span style="color:#8b949e; font-size:13px;">Health: <code>GET /health</code></span>
+                </div>
+            </div>
+
+            <div class="section-title">🏗️ Architecture Pipeline</div>
+            <div class="arch-grid">
+                <div class="arch-step">
+                    <div class="step-icon">🔔</div>
+                    <div class="step-title">Webhook Trigger</div>
+                    <div class="step-desc">GitHub push event fires</div>
+                </div>
+                <div class="arch-step">
+                    <div class="step-icon">🔐</div>
+                    <div class="step-title">Mint Token</div>
+                    <div class="step-desc">Ed25519 IntentToken signed</div>
+                </div>
+                <div class="arch-step">
+                    <div class="step-icon">🤖</div>
+                    <div class="step-title">3 AI Agents</div>
+                    <div class="step-desc">Linter · Security · Perf</div>
+                </div>
+                <div class="arch-step">
+                    <div class="step-icon">🛡️</div>
+                    <div class="step-title">Proxy Enforce</div>
+                    <div class="step-desc">ArmorIQ blocks violations</div>
+                </div>
+            </div>
+
+            <div class="section-title">📋 Recent Reviews</div>
+            {reviews_html}
+
+            <div class="footer">
+                <p>MANDATE — Team BRUTE FORCE · NIT Delhi</p>
+                <p style="margin-top:6px;"><a href="https://github.com/bitmorphic/mandate" target="_blank">GitHub Repository</a> · ArmorIQ Track · Automate India Hackathon</p>
+                <p style="margin-top:8px; color:#555; font-style:italic;">"Capability is not authority. MANDATE proves it."</p>
+            </div>
         </div>
-
-        <h3>Recent Reviews</h3>
-        {reviews_html}
     </body>
     </html>
     """
+
+
 
 
 @app.get("/health")
