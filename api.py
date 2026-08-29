@@ -91,6 +91,13 @@ def dashboard():
             <p style="color:#aaa;">Health check: <code style="background:#0d1117; padding:4px 8px; border-radius:4px;">GET /health</code></p>
         </div>
 
+        <div style="background:#0d1117; border:1px solid #30363d; border-radius:8px; padding:20px; margin:20px 0; text-align:center;">
+            <h3 style="color:#e6edf3; margin-bottom:12px;">The MANDATE Pipeline</h3>
+            <!-- Embedding Google Drive video -->
+            <iframe src="https://drive.google.com/file/d/1HdJYhQ0SgrssghZtBD0Ex937gPQeudS9/preview" width="100%" height="400" style="border:none; border-radius:8px; overflow:hidden;" allow="autoplay"></iframe>
+            <p style="color:#aaa; font-size:13px; margin-top:12px;">Watch how ArmorIQ blocks unauthorized actions in real-time.</p>
+        </div>
+
         <h3>Recent Reviews</h3>
         {reviews_html}
     </body>
